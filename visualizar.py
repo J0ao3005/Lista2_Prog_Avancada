@@ -1,7 +1,6 @@
 import sys
-import numpy as np
 import pandas as pd
-import pyvista as pv
+import matplotlib.pyplot as plt
 
 def main():
     filename = sys.argv[1] if len(sys.argv) > 1 else "arvore_fisica.csv"
@@ -10,57 +9,51 @@ def main():
         dados = pd.read_csv(filename)
     except FileNotFoundError:
         print(f"Erro: arquivo '{filename}' nao encontrado.")
-        print("Execute primeiro: ./minicco1 <Nterm> <R> <gamma> <M>")
         sys.exit(1)
-        
+
     if dados.empty:
         print("Nenhum segmento encontrado no arquivo.")
         sys.exit(1)
 
     print(f"Lendo {len(dados)} segmentos de {filename}...")
 
-    # Configuração do PyVista
-    plotter = pv.Plotter()
-    plotter.background_color = 'white'
+    plt.figure(figsize=(10, 10))
     
-    pontos_nos = []
-    raiz_pt = None
-
-    # Monta os tubos cilíndricos segmento por segmento
+    # Encontra o maior e o menor raio para normalizar a espessura da linha
+    raio_max = dados['raio'].max()
+    raio_min = dados['raio'].min()
+    
+    # Plota segmento por segmento
     for index, row in dados.iterrows():
-        p0 = np.array([row["x0"], row["y0"], 0.0])
-        p1 = np.array([row["x1"], row["y1"], 0.0])
-        raio = row["raio"]
+        x = [row['x0'], row['x1']]
+        y = [row['y0'], row['y1']]
+        raio = row['raio']
         
-        # Garante que raios extremamente pequenos não "sumam" na visualização
-        if raio < 1e-6:
-            raio = 1e-6
+        # Normalizando a espessura da linha entre 1.0 (mais fina) e 8.0 (mais grossa)
+        if raio_max > 0 and raio_max != raio_min:
+            espessura = 1.0 + 7.0 * ((raio - raio_min) / (raio_max - raio_min))
+        else:
+            espessura = 3.0 # Fator padrão caso a árvore só tenha um segmento
             
-        # Cria a linha e aplica a espessura (tubo)
-        linha = pv.Line(p0, p1)
-        tubo = linha.tube(radius=raio, n_sides=20)
+        # Desenha a "artéria" (linha com espessura variável)
+        plt.plot(x, y, color='crimson', linewidth=espessura, zorder=1, solid_capstyle='round')
         
-        plotter.add_mesh(tubo, color='crimson', smooth_shading=True)
-        
-        # Armazena os pontos para desenhar as esferas depois
-        pontos_nos.append(p1)
-        if raiz_pt is None:
-            raiz_pt = p0  # O primeiro x0, y0 do arquivo será a raiz
-            pontos_nos.append(p0)
+        # Desenha o nó na ponta
+        plt.scatter([row['x1']], [row['y1']], color='steelblue', s=15, zorder=2)
 
-    # Adiciona as esferas nos nós e bifurcações
-    if pontos_nos:
-        nuvem_pontos = pv.PolyData(np.array(pontos_nos))
-        plotter.add_mesh(nuvem_pontos, point_size=5, render_points_as_spheres=True, color='steelblue', label='Nós/Bifurcações')
+    # Destaca a raiz (usa a coordenada x0, y0 do primeiro segmento)
+    raiz_x = dados.iloc[0]['x0']
+    raiz_y = dados.iloc[0]['y0']
+    plt.scatter([raiz_x], [raiz_y], color='gold', edgecolor='black', s=150, zorder=3, label='Raiz')
 
-    # Destaca a raiz
-    if raiz_pt is not None:
-        plotter.add_mesh(pv.PolyData(np.array([raiz_pt])), point_size=15, render_points_as_spheres=True, color='gold', label='Raiz')
-
-    # Configura a câmera e exibe
-    plotter.view_xy()
-    plotter.add_legend()
-    plotter.show(title="MiniCCO-1 — Árvore com Escala de Raios")
+    plt.title("MiniCCO-1 — Árvore com Escala de Raios")
+    plt.axis('equal')
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.legend()
+    
+    # Salva em arquivo PNG em vez de tentar abrir a interface gráfica
+    plt.savefig("arvore_fisica_vis.png", dpi=300, bbox_inches='tight')
+    print("Sucesso! Imagem salva como 'arvore_fisica_vis.png'.")
 
 if __name__ == "__main__":
     main()
